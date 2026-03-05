@@ -14,6 +14,17 @@ function EasterEgg:OnEnable()
 end
 
 function EasterEgg:OnPlayerTargetChanged()
+  local inRaid = false
+  if IsInRaid then
+    inRaid = IsInRaid() == true
+    if not inRaid and LE_PARTY_CATEGORY_INSTANCE then
+      inRaid = IsInRaid(LE_PARTY_CATEGORY_INSTANCE) == true
+    end
+  end
+  if not inRaid then
+    return
+  end
+
   local targetGUID = UnitGUID("target")
   if targetGUID == self.lastTargetGUID then
     return
