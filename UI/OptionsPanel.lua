@@ -12,12 +12,22 @@ end
 function OptionsPanel:OnInitialize()
   self.panel = nil
   self.categoryID = nil
+  self.eventFrame = CreateFrame("Frame")
+  self.pendingOpen = false
   self.useTSMCheckbox = nil
   self.debugCheckbox = nil
   self.lockHUDCheckbox = nil
   self.itemIDEditBox = nil
   self.priceEditBox = nil
   self.trackedItemsText = nil
+
+  self.eventFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_ENABLED" and self.pendingOpen then
+      self.pendingOpen = false
+      self.eventFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+      self:Open()
+    end
+  end)
 end
 
 function OptionsPanel:OnEnable()
@@ -210,6 +220,16 @@ end
 function OptionsPanel:Open()
   if not self.panel then
     self:CreatePanel()
+  end
+
+  if InCombatLockdown and InCombatLockdown() then
+    if self.pendingOpen then
+      return
+    end
+    self.pendingOpen = true
+    self.eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    Addon:Print("Options cannot be opened in combat. Opening when combat ends.")
+    return
   end
 
   if Settings and Settings.OpenToCategory and self.categoryID then

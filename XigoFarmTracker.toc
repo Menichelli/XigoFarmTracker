@@ -17,6 +17,7 @@ Modules/Pricing/TSMPriceProvider.lua
 Modules/Pricing/PricingService.lua
 Modules/InventoryTracker.lua
 Modules/Metrics.lua
+Modules/EasterEgg.lua
 UI/HUD.lua
 UI/OptionsPanel.lua
 UI/SlashCommands.lua
