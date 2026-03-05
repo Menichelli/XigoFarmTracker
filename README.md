@@ -155,3 +155,7 @@ Main structure:
 - No global namespace pollution for addon internals (single local addon table pattern).
 - Optional dependency declared in TOC:
   - `## OptionalDeps: TradeSkillMaster`
+
+## Contact
+
+- `Xïgo-Sargeras`
