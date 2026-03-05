@@ -24,6 +24,29 @@ local function sumValues(map)
   return sum
 end
 
+local function addUniqueNumber(list, set, value)
+  value = tonumber(value)
+  if not value then
+    return
+  end
+
+  value = math.floor(value)
+  if value < 0 or set[value] then
+    return
+  end
+
+  set[value] = true
+  list[#list + 1] = value
+end
+
+local function joinNumberList(values)
+  local parts = {}
+  for i = 1, #values do
+    parts[i] = tostring(values[i])
+  end
+  return table.concat(parts, ",")
+end
+
 local function getContainerNumSlots(bagID)
   if C_Container and C_Container.GetContainerNumSlots then
     return C_Container.GetContainerNumSlots(bagID) or 0
@@ -59,17 +82,24 @@ function InventoryTracker:OnInitialize()
   self.scanPending = false
   self.currentCounts = self.tableUtil:CopyMap(self.db.lastBagCounts or {})
   self.bagIDs = {}
+  self.bagIDSet = {}
+  self.reagentBagID = nil
 end
 
 function InventoryTracker:OnEnable()
   self:BuildBagList()
   Addon:RegisterEvent("BAG_UPDATE_DELAYED", self, "OnBagUpdateDelayed")
+  Addon:RegisterEvent("BAG_UPDATE", self, "OnBagUpdate")
   Addon:RegisterEvent("LOOT_OPENED", self, "OnLootOpened")
   Addon:RegisterMessage("TRACKED_ITEMS_CHANGED", self, "OnTrackedItemsChanged")
   Addon:RegisterMessage("SESSION_STARTED", self, "OnSessionStarted")
   Addon:RegisterMessage("SESSION_RESUMED", self, "OnSessionResumed")
   Addon:RegisterMessage("SESSION_RESET", self, "OnSessionReset")
-  Addon:Debug(string.format("[InventoryTracker] enabled, bagIDs=%d", #self.bagIDs))
+  Addon:Debug(string.format(
+    "[InventoryTracker] enabled, bagIDs=%s reagentBagID=%s",
+    joinNumberList(self.bagIDs),
+    tostring(self.reagentBagID)
+  ))
   self:RequestScan("enable")
 end
 
@@ -77,21 +107,51 @@ function InventoryTracker:BuildBagList()
   local minBagID = BACKPACK_CONTAINER or 0
   local maxBagID = NUM_BAG_SLOTS or 4
   local bagIDs = {}
+  local bagIDSet = {}
+  local reagentBagID
 
   for bagID = minBagID, maxBagID do
-    bagIDs[#bagIDs + 1] = bagID
+    addUniqueNumber(bagIDs, bagIDSet, bagID)
   end
 
-  if type(REAGENTBAG_CONTAINER) == "number" and REAGENTBAG_CONTAINER > maxBagID then
-    bagIDs[#bagIDs + 1] = REAGENTBAG_CONTAINER
+  if type(REAGENTBAG_CONTAINER) == "number" then
+    reagentBagID = REAGENTBAG_CONTAINER
+  elseif type(Enum) == "table"
+      and type(Enum.BagIndex) == "table"
+      and type(Enum.BagIndex.ReagentBag) == "number" then
+    reagentBagID = Enum.BagIndex.ReagentBag
+  elseif maxBagID < 5 and getContainerNumSlots(5) > 0 then
+    -- Retail fallback when constants are unavailable but bag 5 exists.
+    reagentBagID = 5
   end
+
+  addUniqueNumber(bagIDs, bagIDSet, reagentBagID)
 
   self.bagIDs = bagIDs
+  self.bagIDSet = bagIDSet
+  self.reagentBagID = reagentBagID
+  Addon:Debug(string.format(
+    "[InventoryTracker] BuildBagList bagIDs=%s reagentBagID=%s",
+    joinNumberList(self.bagIDs),
+    tostring(self.reagentBagID)
+  ))
 end
 
 function InventoryTracker:OnBagUpdateDelayed()
   Addon:Debug("[InventoryTracker] event BAG_UPDATE_DELAYED")
   self:RequestScan("bag_update")
+end
+
+function InventoryTracker:OnBagUpdate(_, bagID)
+  bagID = tonumber(bagID)
+  if not bagID then
+    return
+  end
+
+  if self.reagentBagID and bagID == self.reagentBagID then
+    Addon:Debug(string.format("[InventoryTracker] event BAG_UPDATE reagent bagID=%d", bagID))
+    self:RequestScan("bag_update_reagent")
+  end
 end
 
 function InventoryTracker:OnLootOpened()
