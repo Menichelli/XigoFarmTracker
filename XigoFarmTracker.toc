@@ -1,0 +1,22 @@
+## Interface: 120000
+## Title: XigoFarmTracker
+## Notes: Farm session tracker with TSM/manual pricing fallback.
+## Author: Xigo
+## Version: 0.1.0
+## SavedVariables: XigoFarmTrackerDB
+## OptionalDeps: TradeSkillMaster
+
+Core.lua
+Utils/Constants.lua
+Utils/Table.lua
+Utils/Money.lua
+Modules/TrackedItems.lua
+Modules/SessionManager.lua
+Modules/Pricing/ManualPriceProvider.lua
+Modules/Pricing/TSMPriceProvider.lua
+Modules/Pricing/PricingService.lua
+Modules/InventoryTracker.lua
+Modules/Metrics.lua
+UI/HUD.lua
+UI/OptionsPanel.lua
+UI/SlashCommands.lua
