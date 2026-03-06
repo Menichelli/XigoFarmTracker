@@ -1,6 +1,7 @@
 local _, Addon = ...
 
 local TSMPriceProvider = {}
+local MIN_BUYOUT_SAFETY_FACTOR = 0.8
 
 local function roundPrice(value)
   value = tonumber(value)
@@ -8,6 +9,15 @@ local function roundPrice(value)
     return nil
   end
   return math.floor(value + 0.5)
+end
+
+local function applySafetyFactor(value)
+  value = roundPrice(value)
+  if not value then
+    return nil
+  end
+
+  return roundPrice(value * MIN_BUYOUT_SAFETY_FACTOR)
 end
 
 function TSMPriceProvider:OnInitialize()
@@ -53,29 +63,34 @@ function TSMPriceProvider:GetPrice(itemID)
   local itemString = "i:" .. tostring(itemID)
 
   if type(_G.TSM_API) == "table" and type(_G.TSM_API.GetCustomPriceValue) == "function" then
-    local ok, value = pcall(_G.TSM_API.GetCustomPriceValue, "dbmarket", itemString)
+    local ok, value = pcall(_G.TSM_API.GetCustomPriceValue, "dbminbuyout", itemString)
     if ok then
-      value = roundPrice(value)
+      value = applySafetyFactor(value)
       if value then
         return value
       end
     end
 
-    ok, value = pcall(_G.TSM_API.GetCustomPriceValue, "dbminbuyout", itemString)
+    ok, value = pcall(_G.TSM_API.GetCustomPriceValue, "dbmarket", itemString)
     if ok then
-      return roundPrice(value)
+      return applySafetyFactor(value)
     end
   end
 
   if type(_G.TSM_API_FOUR) == "table" then
     local customPrice = _G.TSM_API_FOUR.CustomPrice
     if type(customPrice) == "table" and type(customPrice.GetValue) == "function" then
-      local ok, value = pcall(customPrice.GetValue, "dbmarket", itemString)
+      local ok, value = pcall(customPrice.GetValue, "dbminbuyout", itemString)
       if ok then
-        value = roundPrice(value)
+        value = applySafetyFactor(value)
         if value then
           return value
         end
+      end
+
+      ok, value = pcall(customPrice.GetValue, "dbmarket", itemString)
+      if ok then
+        return applySafetyFactor(value)
       end
     end
   end
