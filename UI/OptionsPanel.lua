@@ -1,6 +1,13 @@
 local _, Addon = ...
 
 local OptionsPanel = {}
+local SORT_MODE_ORDER = { "ITEM_ID", "QTY", "UNIT_PRICE", "TOTAL_PRICE" }
+local SORT_MODE_LABELS = {
+  ITEM_ID = "ItemID",
+  QTY = "Quantity",
+  UNIT_PRICE = "Unit price",
+  TOTAL_PRICE = "Total price",
+}
 
 local function setCheckboxText(checkbox, text)
   local label = checkbox.Text or checkbox.text
@@ -17,6 +24,7 @@ function OptionsPanel:OnInitialize()
   self.useTSMCheckbox = nil
   self.debugCheckbox = nil
   self.lockHUDCheckbox = nil
+  self.sortDropdown = nil
   self.itemIDEditBox = nil
   self.priceEditBox = nil
   self.trackedItemsText = nil
@@ -35,6 +43,80 @@ function OptionsPanel:OnEnable()
   Addon:RegisterMessage("TRACKED_ITEMS_CHANGED", self, "Refresh")
   Addon:RegisterMessage("PRICE_SOURCE_CHANGED", self, "Refresh")
   Addon:RegisterMessage("SESSION_STATE_CHANGED", self, "Refresh")
+end
+
+function OptionsPanel:GetSortMode()
+  local mode = Addon.db.profile.ui.options.trackedItemsSort
+  if SORT_MODE_LABELS[mode] then
+    return mode
+  end
+  return "ITEM_ID"
+end
+
+function OptionsPanel:GetSortModeLabel(mode)
+  mode = mode or self:GetSortMode()
+  return SORT_MODE_LABELS[mode] or SORT_MODE_LABELS.ITEM_ID
+end
+
+function OptionsPanel:RefreshSortDropdown()
+  if not self.sortDropdown then
+    return
+  end
+
+  local mode = self:GetSortMode()
+
+  if UIDropDownMenu_SetSelectedValue then
+    UIDropDownMenu_SetSelectedValue(self.sortDropdown, mode)
+  end
+  if UIDropDownMenu_SetText then
+    UIDropDownMenu_SetText(self.sortDropdown, self:GetSortModeLabel(mode))
+  end
+end
+
+function OptionsPanel:InitializeSortDropdown()
+  if not self.sortDropdown or not UIDropDownMenu_Initialize then
+    return
+  end
+
+  UIDropDownMenu_Initialize(self.sortDropdown, function(_, level)
+    if level and level > 1 then
+      return
+    end
+
+    for i = 1, #SORT_MODE_ORDER do
+      local mode = SORT_MODE_ORDER[i]
+      local info = UIDropDownMenu_CreateInfo and UIDropDownMenu_CreateInfo()
+      if info then
+        info.text = self:GetSortModeLabel(mode)
+        info.value = mode
+        info.checked = (mode == self:GetSortMode())
+        info.func = function(button)
+          self:SetSortMode(button.value)
+        end
+        info.isNotRadio = false
+        info.keepShownOnClick = false
+        UIDropDownMenu_AddButton(info, level)
+      end
+    end
+  end)
+
+  self:RefreshSortDropdown()
+end
+
+function OptionsPanel:SetSortMode(mode)
+  if not SORT_MODE_LABELS[mode] then
+    mode = "ITEM_ID"
+  end
+
+  Addon.db.profile.ui.options.trackedItemsSort = mode
+  self:RefreshSortDropdown()
+
+  local hud = Addon:GetModule("HUD")
+  if hud then
+    hud:Refresh(false)
+  end
+
+  self:Refresh()
 end
 
 function OptionsPanel:CreatePanel()
@@ -88,9 +170,24 @@ function OptionsPanel:CreatePanel()
   end)
   self.lockHUDCheckbox = lockHUD
 
+  local sortLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  sortLabel:SetPoint("TOPLEFT", lockHUD, "BOTTOMLEFT", 4, -12)
+  sortLabel:SetText("Tracked items sort")
+
+  local sortDropdown = CreateFrame("Frame", "XigoFarmTrackerSortDropdown", panel, "UIDropDownMenuTemplate")
+  sortDropdown:SetPoint("TOPLEFT", sortLabel, "BOTTOMLEFT", -16, -2)
+  if UIDropDownMenu_SetWidth then
+    UIDropDownMenu_SetWidth(sortDropdown, 180)
+  end
+  if UIDropDownMenu_JustifyText then
+    UIDropDownMenu_JustifyText(sortDropdown, "LEFT")
+  end
+  self.sortDropdown = sortDropdown
+  self:InitializeSortDropdown()
+
   local startButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   startButton:SetSize(70, 22)
-  startButton:SetPoint("TOPLEFT", lockHUD, "BOTTOMLEFT", 4, -16)
+  startButton:SetPoint("TOPLEFT", sortDropdown, "BOTTOMLEFT", 16, -8)
   startButton:SetText("Start")
   startButton:SetScript("OnClick", function()
     local session = Addon:GetModule("SessionManager")
@@ -307,6 +404,7 @@ function OptionsPanel:Refresh()
   self.useTSMCheckbox:SetChecked(pricing and pricing:IsTSMEnabled())
   self.debugCheckbox:SetChecked(Addon.db.global.debug == true)
   self.lockHUDCheckbox:SetChecked(hud and hud:IsLocked())
+  self:RefreshSortDropdown()
 
   if not trackedItems or not money or not tableUtil then
     return

@@ -71,6 +71,7 @@ local defaults = {
       },
       options = {
         minimapButton = false,
+        trackedItemsSort = "ITEM_ID",
       },
     },
     session = {

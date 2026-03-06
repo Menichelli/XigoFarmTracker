@@ -24,6 +24,15 @@ local function createControlButton(parent, label, callback)
   return button
 end
 
+local function getTrackedItemsSortMode()
+  local db = Addon.db
+  local mode = db and db.profile and db.profile.ui and db.profile.ui.options and db.profile.ui.options.trackedItemsSort
+  if mode == "ITEM_ID" or mode == "QTY" or mode == "UNIT_PRICE" or mode == "TOTAL_PRICE" then
+    return mode
+  end
+  return "ITEM_ID"
+end
+
 function HUD:OnInitialize()
   self.money = Addon:GetModule("MoneyUtil")
   self.constants = Addon:GetModule("Constants")
@@ -338,17 +347,42 @@ function HUD:RefreshTrackedItems()
   local tracked = trackedItems:GetAll()
   local counts = inventoryTracker:GetCurrentCounts() or {}
   local sortedKeys = tableUtil:SortedNumericKeys(tracked)
-  local enabledKeys = {}
+  local rowsData = {}
+  local sortMode = getTrackedItemsSortMode()
 
   for i = 1, #sortedKeys do
     local itemID = sortedKeys[i]
     local entry = tracked[itemID]
     if entry and entry.enabled ~= false then
-      enabledKeys[#enabledKeys + 1] = itemID
+      local quantity = counts[itemID] or 0
+      local unitPrice = pricingService:GetUnitPrice(itemID) or 0
+      rowsData[#rowsData + 1] = {
+        itemID = itemID,
+        quantity = quantity,
+        unitPrice = unitPrice,
+        totalPrice = quantity * unitPrice,
+      }
     end
   end
 
-  if #enabledKeys == 0 then
+  table.sort(rowsData, function(a, b)
+    if sortMode == "QTY" then
+      if a.quantity ~= b.quantity then
+        return a.quantity > b.quantity
+      end
+    elseif sortMode == "UNIT_PRICE" then
+      if a.unitPrice ~= b.unitPrice then
+        return a.unitPrice > b.unitPrice
+      end
+    elseif sortMode == "TOTAL_PRICE" then
+      if a.totalPrice ~= b.totalPrice then
+        return a.totalPrice > b.totalPrice
+      end
+    end
+    return a.itemID < b.itemID
+  end)
+
+  if #rowsData == 0 then
     self.frame.emptyText:Show()
     for i = 1, #self.rows do
       self.rows[i]:Hide()
@@ -359,26 +393,24 @@ function HUD:RefreshTrackedItems()
 
   self.frame.emptyText:Hide()
 
-  for index = 1, #enabledKeys do
-    local itemID = enabledKeys[index]
+  for index = 1, #rowsData do
+    local rowData = rowsData[index]
+    local itemID = rowData.itemID
     local row = self:EnsureRow(index)
-    local quantity = counts[itemID] or 0
-    local unitPrice = pricingService:GetUnitPrice(itemID) or 0
-    local totalPrice = quantity * unitPrice
 
     row.idText:SetText(tostring(itemID))
     row.icon:SetTexture(getItemIcon(itemID))
-    row.qtyText:SetText(tostring(quantity))
-    row.unitPriceText:SetText(self.money:FormatCopper(unitPrice))
-    row.totalPriceText:SetText(self.money:FormatCopper(totalPrice))
+    row.qtyText:SetText(tostring(rowData.quantity))
+    row.unitPriceText:SetText(self.money:FormatCopper(rowData.unitPrice))
+    row.totalPriceText:SetText(self.money:FormatCopper(rowData.totalPrice))
     row:Show()
   end
 
-  for i = #enabledKeys + 1, #self.rows do
+  for i = #rowsData + 1, #self.rows do
     self.rows[i]:Hide()
   end
 
-  self.frame.itemsContent:SetHeight(math.max(ITEM_ROW_HEIGHT, #enabledKeys * ITEM_ROW_HEIGHT))
+  self.frame.itemsContent:SetHeight(math.max(ITEM_ROW_HEIGHT, #rowsData * ITEM_ROW_HEIGHT))
 end
 
 function HUD:Refresh(forceRecompute)
